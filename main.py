@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 from torch.autograd import Variable
 import numpy as np
 import time
+import os
 
 class DiceLoss(nn.Module):
     def __init__(self):
@@ -44,8 +45,12 @@ def main():
     net = net.cuda()
     loss = loss.cuda()
     net = torch.nn.DataParallel(net)
-    train_dataset = DatasetLoader('/home/kxw/H-DenseUNet-master/data/myTrainingData', '/raid_1/data/liver/seg') #, random=64)
-    val_dataset = DatasetLoader('/home/kxw/H-DenseUNet-master/data/myTestData', '/home/kxw/H-DenseUNet-master/livermask')
+    train_dataset = DatasetLoader('/home/kxw/H-DenseUNet-master/data/myTrainingData', 
+                                    '/raid_1/data/liver/seg') #, random=64)
+    val_dataset = DatasetLoader('/home/kxw/H-DenseUNet-master/data/myTestData', 
+                                    '/home/kxw/H-DenseUNet-master/livermask')
+    if not os.path.exists('./ckpt'):
+        os.mkdir('./ckpt')
 
     train_loader = DataLoader(
         train_dataset,
@@ -93,11 +98,11 @@ def train(train_loader, net, loss, epoch, optimizer, lr, batch_size):
         param_group['lr'] = lr
     losses = np.zeros(1)
     for i, (ct, seg) in enumerate(train_loader):
-        ct = Variable(ct).cuda().view(-1, 512, 512)
-        seg = Variable(seg).cuda().view(-1, 512, 512)
+        ct = ct.view(-1, 512, 512)
+        seg = seg.view(-1, 512, 512)
         for j in xrange(ct.shape[0]//batch_size):
-            c = ct[j*batch_size:(j+1)*batch_size].view(-1, 1, 512, 512)
-            s = seg[j*batch_size:(j+1)*batch_size].view(-1, 512, 512)
+            c = Variable(ct[j*batch_size:(j+1)*batch_size]).view(-1, 1, 512, 512).cuda()
+            s = Variable(seg[j*batch_size:(j+1)*batch_size]).view(-1, 512, 512).cuda()
             if (s==0).all():
                 del c, s
                 continue
@@ -108,10 +113,9 @@ def train(train_loader, net, loss, epoch, optimizer, lr, batch_size):
             optimizer.step()
             losses += loss_out.data.cpu().numpy()
             del c, s, loss_out
-        del ct, seg
     if epoch % 10 == 0:
         state_dict = net.module.state_dict()
-        for key in state_dict():
+        for key in state_dict:
             state_dict[key] = state_dict[key].cpu()
         torch.save({
             'epoch': epoch,
