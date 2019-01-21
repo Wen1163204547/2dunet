@@ -125,19 +125,21 @@ def train(train_loader, net, loss, epoch, optimizer, lr, batch_size):
 def validate(val_loader, net, loss):
     st = time.time()
     net.eval()
-    losses = []
+    losses = np.zeros(1)
     for i, (ct, seg) in enumerate(val_loader):
-        ct = Variable(ct).cuda()
-        seg = Variable(seg).cuda()
+        ct = Variable(ct).cuda().view(-1, 512, 512)
+        seg = Variable(seg).cuda().view(-1, 512, 512)
         for j in xrange(ct.shape[0]):
-            ct = ct[j:j+1]
-            seg = seg[j:j+1]
-            out = net(ct)
-            loss_out = loss(out, seg)
-            losses.append(loss_out.data[0].cpu().numpy)
+            c = ct[j:(j+1)].view(-1, 1, 512, 512)
+            s = seg[j:(j+1)].view(-1, 512, 512)
+            out = net(c)
+            loss_out = loss(out, s)
+            losses += loss_out.data.cpu().numpy()
+            del c, s, loss_out
+    del ct, seg
 
     et = time.time()
-    print('val loss %2.4f, time %2.4f' % (np.mean(losses), et - st))
+    print('val loss %2.4f, time %2.4f' % (losses/70, et - st))
 
 if __name__ == '__main__':
     main()

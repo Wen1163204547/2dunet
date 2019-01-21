@@ -10,8 +10,10 @@ class DataLoader2d(Dataset):
         self.random = random
         self.ct_path = [os.path.join(ct_path, i) for i in os.listdir(ct_path)]
         self.ct_path.sort()
+        self.ct_path = self.ct_path[:10]
         self.seg_path = [os.path.join(seg_path, i) for i in os.listdir(seg_path)]
         self.seg_path.sort()
+        self.seg_path = self.seg_path[:10]
 
     def __getitem__(self, index):
         ct = sitk.GetArrayFromImage(sitk.ReadImage(self.ct_path[index]))
