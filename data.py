@@ -5,9 +5,10 @@ import torch
 from torch.utils.data import Dataset
 
 class DataLoader2d(Dataset):
-    def __init__(self, ct_path, seg_path, train=True, random=False):
+    def __init__(self, ct_path, seg_path, train=True, random=False, black=True):
         self.train = train
         self.random = random
+        self.black = black
         self.ct_path = [os.path.join(ct_path, i) for i in os.listdir(ct_path)]
         self.ct_path.sort()
         self.ct_path = self.ct_path[:10]
@@ -36,6 +37,10 @@ class DataLoader2d(Dataset):
                 end_slice = start_slice + self.random
                 ct = ct[start_slice:end_slice]
                 seg = seg[start_slice:end_slice]
+        if self.train and self.black:
+            t = np.where(np.sum(seg, (1, 2))!=0)[0]
+            t = t.flatten()
+            ct, seg = ct[t], seg[t]
         return torch.FloatTensor(ct), torch.LongTensor(seg)
 
     def __len__(self):

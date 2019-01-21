@@ -103,9 +103,6 @@ def train(train_loader, net, loss, epoch, optimizer, lr, batch_size):
         for j in xrange(ct.shape[0]//batch_size):
             c = Variable(ct[j*batch_size:(j+1)*batch_size]).view(-1, 1, 512, 512).cuda()
             s = Variable(seg[j*batch_size:(j+1)*batch_size]).view(-1, 512, 512).cuda()
-            if (s==0).all():
-                del c, s
-                continue
             out = net(c)
             loss_out = loss(out, s)
             optimizer.zero_grad()
