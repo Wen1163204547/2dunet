@@ -6,51 +6,55 @@ from data import DataLoader2d as DatasetLoader
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
 import numpy as np
+import argparse
 import time
 import os
+
+
+parser = argparse.ArgumentParser(description='U-Net 2d')
+parser.add_argument('--resume', '-m', metavar='RESUME', default='',
+                     help='model parameters to load')
+parser.add_argument('--save_dir', default='', type=str, metavar='PATH',
+                     help='path to save checkpoint files')
+parser.add_argument('--test', default=0, type=int, metavar='TEST',
+                     help='1 do test evaluation, 0 not')
 
 class DiceLoss(nn.Module):
     def __init__(self):
         super(DiceLoss, self).__init__()
 
     def forward(self, out, seg):
-        out = self.softmax(out)
-        out_v, out_p = torch.max(out, dim=1)
-        out_p = out_p.float()
-        loss = torch.Variable(0)
-        for i in xrange(out.shape[1]):
-            loss += 1 - 2.*((out[:,i]*(seg==i)).sum(1).sum(1).sum(1)+1) / (out[:,i].sum(1).sum(1).sum(1)+(seg==i).sum(1).sum(1).sum(1)+1)
-        return loss
-class SoftmaxLoss(nn.Module):
-    def __init__(self):
-        super(SoftmaxLoss, self).__init__()
-        self.loss = nn.NLLLoss()
-
-    def forward(self, out, seg):
-        import pdb
-        pdb.set_trace()
-        out = torch.nn.functional.log_softmax(out)
-        loss = self.loss(out, seg[:,0])
+        b, w, h = seg.shape
+        seg = seg.unsqueeze(1)
+        seg_one_hot = Variable(torch.FloatTensor(b,3, w, h)).zero_().cuda()
+        seg = seg_one_hot.scatter_(1, seg, 1)
+        loss = Variable(torch.FloatTensor(b)).zero_().cuda()
+        for i in range(3):
+            loss += (1 - 2.*((out[:,i]*seg[:,i]).sum(1).sum(1)) / ((out[:,i]*out[:,i]).sum(1).sum(1)+(seg[:,i]*seg[:,i]).sum(1).sum(1)+1e-15))
+        loss = loss.mean()
+        del seg_one_hot, seg
         return loss
     
-
 def main():
-    import pdb
-    # pdb.set_trace()
+    global args
+    args = parser.parse_args()
     model = 'models.2d_unet'
     net = import_module(model).get_model()
-    # loss = DiceLoss()
-    loss = torch.nn.CrossEntropyLoss()
+    loss = DiceLoss()
+    #loss = torch.nn.CrossEntropyLoss()
     #loss = SoftmaxLoss()
     net = net.cuda()
     loss = loss.cuda()
     net = torch.nn.DataParallel(net)
+    if args.resume:
+        checkpoint = torch.load(args.resume)
+        net.module.load_state_dict(checkpoint['state_dict'])
     train_dataset = DatasetLoader('/home/kxw/H-DenseUNet-master/data/myTrainingData', 
                                     '/raid_1/data/liver/seg') #, random=64)
     val_dataset = DatasetLoader('/home/kxw/H-DenseUNet-master/data/myTestData', 
-                                    '/home/kxw/H-DenseUNet-master/livermask')
-    if not os.path.exists('./ckpt'):
-        os.mkdir('./ckpt')
+                                    '/home/kxw/H-DenseUNet-master/livermask', train=False)
+    if not os.path.exists(args.save_dir):
+        os.mkdir(args.save_dir)
 
     train_loader = DataLoader(
         train_dataset,
@@ -63,9 +67,12 @@ def main():
         val_dataset,
         batch_size = 1,
         shuffle = False,
-        num_workers = 4,
+        num_workers = 1,
         pin_memory=True)
 
+    if args.test == 1:
+        test(val_loader, net, loss)
+        return
     optimizer = optim.Adam(net.parameters(),
                         lr=1e-3, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
 
@@ -130,6 +137,8 @@ def validate(val_loader, net, loss):
     for i, (ct, seg) in enumerate(val_loader):
         ct = Variable(ct).cuda().view(-1, 512, 512)
         seg = Variable(seg).cuda().view(-1, 512, 512)
+        #import pdb
+        #pdb.set_trace()
         for j in xrange(ct.shape[0]):
             c = ct[j:(j+1)].view(-1, 1, 512, 512)
             s = seg[j:(j+1)].view(-1, 512, 512)
@@ -137,10 +146,43 @@ def validate(val_loader, net, loss):
             loss_out = loss(out, s)
             losses += loss_out.data.cpu().numpy()
             del c, s, loss_out
-    del ct, seg
+        del ct, seg
 
     et = time.time()
     print('val loss %2.4f, time %2.4f' % (losses/70, et - st))
+
+def test(val_loader, net, loss=None):
+    st = time.time()
+    net.eval()
+    losses = np.zeros(1)
+    softmax = nn.Softmax(dim=1)
+    for i, (ct, seg) in enumerate(val_loader):
+        c1, c2 = 0, 0
+        ct = Variable(ct).cuda().view(-1, 512, 512)
+        seg = Variable(seg).cuda().view(-1, 512, 512)
+        for j in xrange(ct.shape[0]):
+            c = ct[j:(j+1)].view(-1, 1, 512, 512)
+            s = seg[j:(j+1)].view(-1, 512, 512)
+            out = net(c)
+            loss_out = loss(out, s)
+            losses += loss_out.data.cpu().numpy()
+            v, p = torch.max(softmax(out), 1)
+            p = p.flatten()
+            s = s.flatten()
+            for i in range(1,2):
+               pi = (p>=i).int()
+               si = (s>=i).int()
+               c1 += 2.0 * (pi*si).sum().data.cpu().numpy()
+               c2 += (pi.sum().data.cpu().numpy() + si.sum().data.cpu().numpy())
+               del si, pi
+            del c, s, loss_out, v, p
+        del ct, seg
+        c = c1 / (c2 + 1e-14)
+        print 'dice score', c
+
+
+    et = time.time()
+    print('test loss %2.4f, time %2.4f' % (losses/70, et - st))
 
 if __name__ == '__main__':
     main()
