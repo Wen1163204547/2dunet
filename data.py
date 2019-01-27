@@ -9,18 +9,20 @@ class DataLoader2d(Dataset):
         self.train = train
         self.random = random
         self.black = black
-        self.ct_path = [os.path.join(ct_path, i) for i in os.listdir(ct_path)]
+        data_path = os.listdir(ct_path)
+        self.ct_path = [os.path.join(ct_path, i) for i in data_path if 'volume' in i]
         self.ct_path.sort()
-        self.ct_path = self.ct_path[:10]
-        self.seg_path = [os.path.join(seg_path, i) for i in os.listdir(seg_path)]
+        self.ct_path = self.ct_path
+        self.seg_path = [os.path.join(seg_path, i) for i in data_path if 'segmentation' in i]
         self.seg_path.sort()
-        self.seg_path = self.seg_path[:10]
+        self.seg_path = self.seg_path
 
     def __getitem__(self, index):
         ct = sitk.GetArrayFromImage(sitk.ReadImage(self.ct_path[index]))
         seg = sitk.GetArrayFromImage(sitk.ReadImage(self.seg_path[index]))
         ct = ct.astype(np.float32)
-        seg = seg.astype(np.uint8)
+        seg = (seg > 0.5).astype(np.uint8)
+        ct = ct.clip(-200, 250)
         ct = ct - ct.min() / (ct.max() - ct.min())
         if self.train and self.random:
             if self.random > ct.shape[0]:

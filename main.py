@@ -26,7 +26,7 @@ class DiceLoss(nn.Module):
     def forward(self, out, seg):
         b, w, h = seg.shape
         seg = seg.unsqueeze(1)
-        seg_one_hot = Variable(torch.FloatTensor(b,3, w, h)).zero_().cuda()
+        seg_one_hot = Variable(torch.FloatTensor(b,2, w, h)).zero_().cuda()
         seg = seg_one_hot.scatter_(1, seg, 1)
         loss = Variable(torch.FloatTensor(b)).zero_().cuda()
         for i in range(3):
@@ -40,8 +40,8 @@ def main():
     args = parser.parse_args()
     model = 'models.2d_unet'
     net = import_module(model).get_model()
-    loss = DiceLoss()
-    #loss = torch.nn.CrossEntropyLoss()
+    # loss = DiceLoss()
+    loss = torch.nn.CrossEntropyLoss()
     #loss = SoftmaxLoss()
     net = net.cuda()
     loss = loss.cuda()
@@ -49,10 +49,10 @@ def main():
     if args.resume:
         checkpoint = torch.load(args.resume)
         net.module.load_state_dict(checkpoint['state_dict'])
-    train_dataset = DatasetLoader('/home/kxw/H-DenseUNet-master/data/myTrainingData', 
-                                    '/raid_1/data/liver/seg') #, random=64)
-    val_dataset = DatasetLoader('/home/kxw/H-DenseUNet-master/data/myTestData', 
-                                    '/home/kxw/H-DenseUNet-master/livermask', train=False)
+    train_dataset = DatasetLoader('dataset/train', 
+                               'dataset/train') #, random=64)
+    #val_dataset = DatasetLoader('/home/kxw/H-DenseUNet-master/data/myTestData', 
+    #                                '/home/kxw/H-DenseUNet-master/livermask', train=False)
     if not os.path.exists(args.save_dir):
         os.mkdir(args.save_dir)
 
@@ -63,12 +63,12 @@ def main():
         num_workers = 4,
         pin_memory=True)
     
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size = 1,
-        shuffle = False,
-        num_workers = 1,
-        pin_memory=True)
+    #val_loader = DataLoader(
+    #    val_dataset,
+    #    batch_size = 1,
+    #    shuffle = False,
+    #    num_workers = 1,
+    #    pin_memory=True)
 
     if args.test == 1:
         test(val_loader, net, loss)
@@ -89,8 +89,8 @@ def main():
     for epoch in range(1, 1000+1):
         print ("epoch", epoch)
         lr = lr_restart(T0, Tcur, base_lr)
-        train(train_loader, net, loss, epoch, optimizer, lr, batch_size=8)
-        validate(val_loader, net, loss)
+        train(train_loader, net, loss, epoch, optimizer, lr, batch_size=24)
+        #validate(val_loader, net, loss)
 
         Tcur = Tcur + 1
         if Tcur > T0:
@@ -116,7 +116,7 @@ def train(train_loader, net, loss, epoch, optimizer, lr, batch_size):
             loss_out.backward()
             optimizer.step()
             losses += loss_out.data.cpu().numpy()
-            del c, s, loss_out
+            del c, s, loss_out, out
     if epoch % 10 == 0:
         state_dict = net.module.state_dict()
         for key in state_dict:
