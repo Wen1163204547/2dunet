@@ -29,8 +29,8 @@ class DataLoader2d(Dataset):
             ct = np.array(ct)
             ct_copy = np.copy(ct)
             print ct.shape
-            ct[2, 1:] = ct_copy[1, 0:-1]
-            ct[0, 0:-1] = ct_copy[1, 1:]
+            ct[0, 1:] = ct_copy[1, 0:-1]
+            ct[2, 0:-1] = ct_copy[1, 1:]
             ct = ct.transpose(1,0,2,3)
             del ct_copy
             return torch.FloatTensor(ct), torch.LongTensor(seg), self.ct_path[index]
