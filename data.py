@@ -10,13 +10,12 @@ class DataLoader2d(Dataset):
         self.test = test
         self.random = random
         self.black = black
-        data_path = os.listdir(ct_path)
-        self.ct_path = [os.path.join(ct_path, i) for i in data_path if 'volume' in i]
+        ct_list = os.listdir(ct_path)
+        seg_list = os.listdir(seg_path)
+        self.ct_path = [os.path.join(ct_path, i) for i in ct_list if 'volume' in i]
         self.ct_path.sort()
-        self.ct_path = self.ct_path
-        self.seg_path = [os.path.join(seg_path, i) for i in data_path if 'segmentation' in i]
+        self.seg_path = [os.path.join(seg_path, i) for i in seg_list if 'segmentation' in i]
         self.seg_path.sort()
-        self.seg_path = self.seg_path
 
     def __getitem__(self, index):
         ct = sitk.GetArrayFromImage(sitk.ReadImage(self.ct_path[index]))
@@ -27,9 +26,13 @@ class DataLoader2d(Dataset):
         ct = ct - ct.min() / (ct.max() - ct.min())
         ct = np.broadcast_to(ct, (3,)+ct.shape)
         if self.test:
-            ct[0, 0:-2] = ct[0, 1:-1]
-            ct[2, 2:] = ct[2, 1:-1]
+            ct = np.array(ct)
+            ct_copy = np.copy(ct)
+            print ct.shape
+            ct[2, 1:] = ct_copy[1, 0:-1]
+            ct[0, 0:-1] = ct_copy[1, 1:]
             ct = ct.transpose(1,0,2,3)
+            del ct_copy
             return torch.FloatTensor(ct), torch.LongTensor(seg), self.ct_path[index]
         ct = np.array([ct[0, 0:-2], ct[1, 1:-1], ct[2, 2:]])
         ct = ct.transpose(1,0,2,3)
