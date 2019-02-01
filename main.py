@@ -5,6 +5,7 @@ from importlib import import_module
 from data import DataLoader2d as DatasetLoader 
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
+import SimpleITK as sitk
 import numpy as np
 import argparse
 import time
@@ -29,7 +30,7 @@ class DiceLoss(nn.Module):
         seg_one_hot = Variable(torch.FloatTensor(b,2, w, h)).zero_().cuda()
         seg = seg_one_hot.scatter_(1, seg, 1)
         loss = Variable(torch.FloatTensor(b)).zero_().cuda()
-        for i in range(3):
+        for i in range(2):
             loss += (1 - 2.*((out[:,i]*seg[:,i]).sum(1).sum(1)) / ((out[:,i]*out[:,i]).sum(1).sum(1)+(seg[:,i]*seg[:,i]).sum(1).sum(1)+1e-15))
         loss = loss.mean()
         del seg_one_hot, seg
@@ -40,8 +41,8 @@ def main():
     args = parser.parse_args()
     model = 'models.2d_unet'
     net = import_module(model).get_model()
-    # loss = DiceLoss()
-    loss = torch.nn.CrossEntropyLoss()
+    loss = DiceLoss()
+    #loss = torch.nn.CrossEntropyLoss()
     #loss = SoftmaxLoss()
     net = net.cuda()
     loss = loss.cuda()
@@ -51,6 +52,8 @@ def main():
         net.module.load_state_dict(checkpoint['state_dict'])
     train_dataset = DatasetLoader('dataset/train', 
                                'dataset/train') #, random=64)
+    val_dataset = DatasetLoader('dataset/val', 
+                               'dataset/val', test=True)
     #val_dataset = DatasetLoader('/home/kxw/H-DenseUNet-master/data/myTestData', 
     #                                '/home/kxw/H-DenseUNet-master/livermask', train=False)
     if not os.path.exists(args.save_dir):
@@ -63,12 +66,12 @@ def main():
         num_workers = 4,
         pin_memory=True)
     
-    #val_loader = DataLoader(
-    #    val_dataset,
-    #    batch_size = 1,
-    #    shuffle = False,
-    #    num_workers = 1,
-    #    pin_memory=True)
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size = 1,
+        shuffle = False,
+        num_workers = 1,
+        pin_memory=True)
 
     if args.test == 1:
         test(val_loader, net, loss)
@@ -105,10 +108,13 @@ def train(train_loader, net, loss, epoch, optimizer, lr, batch_size):
         param_group['lr'] = lr
     losses = np.zeros(1)
     for i, (ct, seg) in enumerate(train_loader):
-        ct = ct.view(-1, 512, 512)
+        #import pdb
+        #pdb.set_trace()
+        ct = ct.view(-1, 3, 512, 512)
         seg = seg.view(-1, 512, 512)
+        seg = (seg > 0.5).long()
         for j in xrange(ct.shape[0]//batch_size):
-            c = Variable(ct[j*batch_size:(j+1)*batch_size]).view(-1, 1, 512, 512).cuda()
+            c = Variable(ct[j*batch_size:(j+1)*batch_size]).view(-1, 3, 512, 512).cuda()
             s = Variable(seg[j*batch_size:(j+1)*batch_size]).view(-1, 512, 512).cuda()
             out = net(c)
             loss_out = loss(out, s)
@@ -128,7 +134,7 @@ def train(train_loader, net, loss, epoch, optimizer, lr, batch_size):
             os.path.join('./ckpt', 'train_2d_%04d'%epoch+'.ckpt'))
 
     et = time.time()
-    print('train loss %2.4f, time %2.4f' % (losses/131, et - st))
+    print('train loss %2.4f, time %2.4f' % (losses/101, et - st))
 
 def validate(val_loader, net, loss):
     st = time.time()
@@ -156,33 +162,37 @@ def test(val_loader, net, loss=None):
     net.eval()
     losses = np.zeros(1)
     softmax = nn.Softmax(dim=1)
-    for i, (ct, seg) in enumerate(val_loader):
+    for i, (ct, seg, name) in enumerate(val_loader):
+        out_results = []
         c1, c2 = 0, 0
-        ct = Variable(ct).cuda().view(-1, 512, 512)
+        ct = Variable(ct).cuda().view(-1, 3, 512, 512)
         seg = Variable(seg).cuda().view(-1, 512, 512)
         for j in xrange(ct.shape[0]):
-            c = ct[j:(j+1)].view(-1, 1, 512, 512)
+            c = ct[j:(j+1)].view(-1, 3, 512, 512)
             s = seg[j:(j+1)].view(-1, 512, 512)
             out = net(c)
             loss_out = loss(out, s)
             losses += loss_out.data.cpu().numpy()
             v, p = torch.max(softmax(out), 1)
+            out_results.append(p.data.cpu().numpy()[0])
             p = p.flatten()
             s = s.flatten()
-            for i in range(1,2):
-               pi = (p>=i).int()
-               si = (s>=i).int()
-               c1 += 2.0 * (pi*si).sum().data.cpu().numpy()
-               c2 += (pi.sum().data.cpu().numpy() + si.sum().data.cpu().numpy())
-               del si, pi
+            c1 += 2.0 * (p*s).sum().data.cpu().numpy()
+            c2 += (p.sum().data.cpu().numpy() + s.sum().data.cpu().numpy())
             del c, s, loss_out, v, p
-        del ct, seg
+        results = np.array(out_results)
+        out = sitk.GetImageFromArray(results)
+        sitk.WriteImage(out, './results/'+name[0].split('/')[-1])
+
+        print name[0].split('/')[-1]
+        print results.shape
+        del ct, seg, out, results
         c = c1 / (c2 + 1e-14)
         print 'dice score', c
 
 
     et = time.time()
-    print('test loss %2.4f, time %2.4f' % (losses/70, et - st))
+    print('test loss %2.4f, time %2.4f' % (losses/28, et - st))
 
 if __name__ == '__main__':
     main()

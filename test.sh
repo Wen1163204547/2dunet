@@ -1,1 +1,1 @@
-CUDA_VISIBLE_DEVICES=3 python main.py --resume './train_2d_0110.ckpt' --test 1 --save_dir './ckpt'
+CUDA_VISIBLE_DEVICES=2 python main.py --resume './ckpt/train_2d_0200.ckpt' --test 1 --save_dir './ckpt'

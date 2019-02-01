@@ -5,7 +5,7 @@ class UNet_2d(nn.Module):
     def __init__(self):
         super(UNet_2d, self).__init__()
 
-        forw_chs = [1, 64, 128, 256, 512, 1024]
+        forw_chs = [3, 64, 128, 256, 512, 1024]
         back_chs = [1024, 512, 256, 128]
         for i in xrange(len(forw_chs) - 1):
             block = nn.Sequential(
@@ -26,7 +26,7 @@ class UNet_2d(nn.Module):
                     nn.ReLU(inplace=True),
                     nn.Conv2d(64, 64, (3, 3), padding=1),
                     nn.ReLU(inplace=True),
-                    nn.Conv2d(64, 3, (1, 1), padding=0))
+                    nn.Conv2d(64, 2, (1, 1), padding=0))
         self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
         # self.upconv = nn.Upsample(scale_factor=(2, 2))
         self.upconv1 = nn.ConvTranspose2d(1024, 512, 2, stride=2, padding=0)
