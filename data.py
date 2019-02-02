@@ -5,7 +5,7 @@ import torch
 from torch.utils.data import Dataset
 
 class DataLoader2d(Dataset):
-    def __init__(self, ct_path, seg_path, train=True, random=False, black=True, test=False):
+    def __init__(self, ct_path, seg_path, train=True, random=False, black=True, test=False, mask=None):
         self.train = train
         self.test = test
         self.random = random
@@ -16,6 +16,13 @@ class DataLoader2d(Dataset):
         self.ct_path.sort()
         self.seg_path = [os.path.join(seg_path, i) for i in seg_list if 'segmentation' in i]
         self.seg_path.sort()
+        if mask:
+            mask_list = os.listdir(mask)
+            self.mask = [os.path.join(mask, i) for i in mask_list if 'volume' in i]
+            self.mask.sort()
+        else: 
+            self.mask = mask
+
 
     def __getitem__(self, index):
         ct = sitk.GetArrayFromImage(sitk.ReadImage(self.ct_path[index]))
@@ -23,16 +30,17 @@ class DataLoader2d(Dataset):
         ct = ct.astype(np.float32)
         seg = seg.astype(np.uint8)
         ct = ct.clip(-200, 250)
+        if self.mask:
+            mask = sitk.GetArrayFromImage(sitk.ReadImage(self.mask[index]))
+            ct = ct * mask
+        # TODO: dakuohaoa
         ct = ct - ct.min() / (ct.max() - ct.min())
         ct = np.broadcast_to(ct, (3,)+ct.shape)
         if self.test:
             ct = np.array(ct)
-            ct_copy = np.copy(ct)
-            print ct.shape
-            ct[0, 1:] = ct_copy[1, 0:-1]
-            ct[2, 0:-1] = ct_copy[1, 1:]
+            ct[0, 1:] = ct[1, 0:-1]
+            ct[2, 0:-1] = ct[1, 1:]
             ct = ct.transpose(1,0,2,3)
-            del ct_copy
             return torch.FloatTensor(ct), torch.LongTensor(seg), self.ct_path[index]
         ct = np.array([ct[0, 0:-2], ct[1, 1:-1], ct[2, 2:]])
         ct = ct.transpose(1,0,2,3)

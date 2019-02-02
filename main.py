@@ -51,13 +51,13 @@ def main():
         checkpoint = torch.load(args.resume)
         net.module.load_state_dict(checkpoint['state_dict'])
     train_dataset = DatasetLoader('dataset/train', 
-                               'dataset/train') #, random=64)
+                               'dataset/train', test=True) #, random=64)
     val_dataset = DatasetLoader('dataset/val', 
                                'dataset/val', test=True)
     #val_dataset = DatasetLoader('/home/kxw/H-DenseUNet-master/data/myTestData', 
     #                                '/home/kxw/H-DenseUNet-master/livermask', train=False)
     if not os.path.exists(args.save_dir):
-        os.mkdir(args.save_dir)
+        os.makedirs(args.save_dir)
 
     train_loader = DataLoader(
         train_dataset,
@@ -67,7 +67,8 @@ def main():
         pin_memory=True)
     
     val_loader = DataLoader(
-        val_dataset,
+        train_dataset,
+        #val_dataset,
         batch_size = 1,
         shuffle = False,
         num_workers = 1,
@@ -183,11 +184,10 @@ def test(val_loader, net, loss=None):
             del c, s, loss_out, v, p
         results = np.array(out_results)
         out = sitk.GetImageFromArray(results)
-        sitk.WriteImage(out, './results/'+name[0].split('/')[-1])
+        sitk.WriteImage(out, args.save_dir+'/'+name[0].split('/')[-1])
 
         print name[0].split('/')[-1]
-        print results.shape
-        del ct, seg, out, results
+        del ct, seg, out, results, out_results
         c = c1 / (c2 + 1e-14)
         print 'dice score', c
 
