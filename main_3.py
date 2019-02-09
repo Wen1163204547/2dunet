@@ -65,7 +65,7 @@ def main():
         train_dataset,
         batch_size = 1,
         shuffle = True,
-        num_workers = 4,
+        num_workers = 0,
         pin_memory=True)
     
     val_loader = DataLoader(
@@ -79,10 +79,14 @@ def main():
         #test(train_loader, net, loss)
         test(val_loader, net, loss)
         return
-    optimizer = optim.Adam(net.parameters(),
-                        lr=1e-3, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
+    #optimizer = optim.Adam(net.parameters(),
+    #                    lr=1e-3, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
+    optimizer = optim.SGD(net.parameters(), 
+                          lr = 1e-2, 
+                          momentum = 0.99,
+                          weight_decay = 1e-4)
 
-    def lr_restart(T0, Tcur, base_lr = 1e-3):
+    def lr_restart(T0, Tcur, base_lr = 1e-2):
         lr_max = base_lr
         lr_min = base_lr * 1e-3
         lr = lr_min + 0.5 * (lr_max - lr_min) * (1+np.cos(Tcur/float(T0) * np.pi))
@@ -109,22 +113,22 @@ def train(train_loader, net, loss, epoch, optimizer, lr, batch_size):
     net.train()
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
-    losses = np.zeros(1)
+    losses = []
     for i, (ct, seg) in enumerate(train_loader):
         #import pdb
         #pdb.set_trace()
-        ct = ct.view(-1, 3, 512, 512)
-        seg = seg.view(-1, 512, 512)
+        ct = ct.squeeze(0)
+        seg = seg.squeeze(0)
         seg = (seg == 2).long()
         for j in xrange(ct.shape[0]//batch_size):
-            c = Variable(ct[j*batch_size:(j+1)*batch_size]).view(-1, 3, 512, 512).cuda()
-            s = Variable(seg[j*batch_size:(j+1)*batch_size]).view(-1, 512, 512).cuda()
+            c = Variable(ct[j*batch_size:(j+1)*batch_size]).cuda()
+            s = Variable(seg[j*batch_size:(j+1)*batch_size]).cuda()
             out = net(c)
             loss_out = loss(out, s)
             optimizer.zero_grad()
             loss_out.backward()
             optimizer.step()
-            losses += loss_out.data.cpu().numpy()
+            losses.append(loss_out.data.cpu().numpy())
             del c, s, loss_out, out
     if epoch % 10 == 0:
         state_dict = net.module.state_dict()
@@ -137,7 +141,7 @@ def train(train_loader, net, loss, epoch, optimizer, lr, batch_size):
             os.path.join(args.save_dir, 'train_2d_%04d'%epoch+'.ckpt'))
 
     et = time.time()
-    print('train loss %2.4f, time %2.4f' % (losses/101, et - st))
+    print('train loss %2.4f, time %2.4f' % (np.array(losses).mean(), et - st))
 
 def validate(val_loader, net, loss):
     st = time.time()
@@ -170,7 +174,7 @@ def test(val_loader, net, loss=None):
         c1, c2 = 0, 0
         ct = Variable(ct).cuda().view(-1, 3, 512, 512)
         seg = Variable(seg).cuda().view(-1, 512, 512)
-        seg = (seg > 0.5).long()
+        seg = (seg == 2).long()
         for j in xrange(ct.shape[0]):
             c = ct[j:(j+1)].view(-1, 3, 512, 512)
             s = seg[j:(j+1)].view(-1, 512, 512)

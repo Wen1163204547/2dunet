@@ -31,8 +31,15 @@ class DataLoader2d(Dataset):
         seg = seg.astype(np.uint8)
         ct = ct.clip(-200, 250)
         if self.mask:
-            mask = sitk.GetArrayFromImage(sitk.ReadImage(self.mask[index]))
-            ct = ct * mask
+            ct = ct * (seg > 0.5).astype(int)
+            #mask = sitk.GetArrayFromImage(sitk.ReadImage(self.mask[index]))
+            a1, a2, a3 = np.where(seg!=0)
+            z_min, z_max = a1.min(), a1.max()
+            x_min, x_max = a2.min(), a3.max()
+            y_min, y_max = a3.min(), a3.max()
+            x_max += 32 - (x_max - x_min) % 32
+            y_max += 32 - (y_max - y_min) % 32
+            ct, seg = ct[z_min:z_max, x_min:x_max, y_min:y_max], seg[z_min:z_max, x_min:x_max, y_min:y_max]
         # TODO: dakuohaoa
         ct = ct - ct.min() / (ct.max() - ct.min())
         ct = np.broadcast_to(ct, (3,)+ct.shape)

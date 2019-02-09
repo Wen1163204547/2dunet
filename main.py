@@ -30,7 +30,7 @@ class DiceLoss(nn.Module):
         seg_one_hot = Variable(torch.FloatTensor(b,2, w, h)).zero_().cuda()
         seg = seg_one_hot.scatter_(1, seg, 1)
         loss = Variable(torch.FloatTensor(b)).zero_().cuda()
-        for i in range(2):
+        for i in range(1,2):
             loss += (1 - 2.*((out[:,i]*seg[:,i]).sum(1).sum(1)) / ((out[:,i]*out[:,i]).sum(1).sum(1)+(seg[:,i]*seg[:,i]).sum(1).sum(1)+1e-15))
         loss = loss.mean()
         del seg_one_hot, seg
