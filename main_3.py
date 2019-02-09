@@ -170,7 +170,7 @@ def test(val_loader, net, loss=None):
         c1, c2 = 0, 0
         ct = Variable(ct).cuda().view(-1, 3, 512, 512)
         seg = Variable(seg).cuda().view(-1, 512, 512)
-        seg = (seg > 0.5).long()
+        seg = (seg == 2).long()
         for j in xrange(ct.shape[0]):
             c = ct[j:(j+1)].view(-1, 3, 512, 512)
             s = seg[j:(j+1)].view(-1, 512, 512)
