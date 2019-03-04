@@ -14,7 +14,7 @@ def score(seg_path, res_path):
 
 if __name__ == '__main__':
     name = os.listdir('./dataset/val')
-    res_list = ['./results/' + i  for i in name if 'volume' in i]
+    res_list = ['./results/val/' + i  for i in name if 'volume' in i]
     seg_list = ['./dataset/val/' + i  for i in name if 'seg' in i]
     res_list.sort()
     seg_list.sort()

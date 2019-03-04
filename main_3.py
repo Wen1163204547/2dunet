@@ -27,21 +27,23 @@ class DiceLoss(nn.Module):
         super(DiceLoss, self).__init__()
 
     def forward(self, out, seg):
-        b, w, h = seg.shape
-        seg = seg.unsqueeze(1)
-        seg_one_hot = Variable(torch.FloatTensor(b,2, w, h)).zero_().cuda()
-        seg = seg_one_hot.scatter_(1, seg, 1)
-        loss = Variable(torch.FloatTensor(b)).zero_().cuda()
-        for i in range(2):
-            loss += (1 - 2.*((out[:,i]*seg[:,i]).sum(1).sum(1)) / ((out[:,i]*out[:,i]).sum(1).sum(1)+(seg[:,i]*seg[:,i]).sum(1).sum(1)+1e-15))
+        #b, w, h = seg.shape
+        seg = seg.float().unsqueeze(1)
+        #seg_one_hot = Variable(torch.FloatTensor(b,2, w, h)).zero_().cuda()
+        #seg = seg_one_hot.scatter_(1, seg, 1)
+        #loss = Variable(torch.FloatTensor(b)).zero_().cuda()
+        #for i in range(1, 2):
+        #    loss += (1 - 2.*((out[:,i]*seg[:,i]).sum(1).sum(1)) / ((out[:,i]*out[:,i]).sum(1).sum(1)+(seg[:,i]*seg[:,i]).sum(1).sum(1)+1e-15))
+        loss = 1 - (2.*((out*seg).sum(1).sum(1)) + 1e-8) / ((out*out).sum(1).sum(1)+(seg*seg).sum(1).sum(1)+1e-8)
         loss = loss.mean()
-        del seg_one_hot, seg
+        #del seg_one_hot, seg
+        del seg
         return loss
     
 def main():
     global args
     args = parser.parse_args()
-    model = 'models.2d_unet'
+    model = 'models.2d_unet_s2'
     net = import_module(model).get_model()
     loss = DiceLoss()
     #loss = torch.nn.CrossEntropyLoss()
@@ -79,12 +81,12 @@ def main():
         #test(train_loader, net, loss)
         test(val_loader, net, loss)
         return
-    #optimizer = optim.Adam(net.parameters(),
-    #                    lr=1e-3, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
-    optimizer = optim.SGD(net.parameters(), 
-                          lr = 1e-2, 
-                          momentum = 0.99,
-                          weight_decay = 1e-4)
+    optimizer = optim.Adam(net.parameters(),
+                        lr=1e-3, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
+    #optimizer = optim.SGD(net.parameters(), 
+    #                      lr = 1e-2, 
+    #                      momentum = 0.99,
+    #                      weight_decay = 1e-4)
 
     def lr_restart(T0, Tcur, base_lr = 1e-2):
         lr_max = base_lr

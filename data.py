@@ -1,6 +1,7 @@
 import numpy as np
 import os
-import SimpleITK as sitk
+# import SimpleITK as sitk  # too slow!
+import nibabel as nib
 import torch
 from torch.utils.data import Dataset
 
@@ -25,10 +26,12 @@ class DataLoader2d(Dataset):
 
 
     def __getitem__(self, index):
-        ct = sitk.GetArrayFromImage(sitk.ReadImage(self.ct_path[index]))
-        seg = sitk.GetArrayFromImage(sitk.ReadImage(self.seg_path[index]))
-        ct = ct.astype(np.float32)
-        seg = seg.astype(np.uint8)
+        ct = nib.load(self.ct_path[index]).get_data().transpose(2,1,0)
+        seg = nib.load(self.seg_path[index]).get_data().transpose(2,1,0)
+        #ct = sitk.GetArrayFromImage(sitk.ReadImage(self.ct_path[index]))
+        #seg = sitk.GetArrayFromImage(sitk.ReadImage(self.seg_path[index]))
+        ct = np.array(ct, dtype=np.float32)
+        seg = np.array(seg, dtype=np.uint8)
         ct = ct.clip(-200, 250)
         if self.mask:
             ct = ct * (seg > 0.5).astype(int)
@@ -40,8 +43,7 @@ class DataLoader2d(Dataset):
             x_max += 32 - (x_max - x_min) % 32
             y_max += 32 - (y_max - y_min) % 32
             ct, seg = ct[z_min:z_max, x_min:x_max, y_min:y_max], seg[z_min:z_max, x_min:x_max, y_min:y_max]
-        # TODO: dakuohaoa
-        ct = ct - ct.min() / (ct.max() - ct.min())
+        ct = (ct - ct.min()) / (ct.max() - ct.min())
         ct = np.broadcast_to(ct, (3,)+ct.shape)
         if self.test:
             ct = np.array(ct)
@@ -68,9 +70,16 @@ class DataLoader2d(Dataset):
                 ct = ct[start_slice:end_slice]
                 seg = seg[start_slice:end_slice]
         if self.train and self.black:
-            t = np.where(np.sum(seg, (1, 2))!=0)[0]
-            t = t.flatten()
-            ct, seg = ct[t], seg[t]
+            #t = np.where(np.sum((seg>0.5), (1, 2))!=0)[0]
+            #t = t.flatten()
+            #ct, seg = ct[t], seg[t]
+            a1, a2, a3 = np.where(seg!=0)
+            z_min, z_max = a1.min(), a1.max()
+            x_min, x_max = a2.min(), a3.max()
+            y_min, y_max = a3.min(), a3.max()
+            x_max += 32 - (x_max - x_min) % 32
+            y_max += 32 - (y_max - y_min) % 32
+            ct, seg = ct[z_min:z_max, x_min:x_max, y_min:y_max], seg[z_min:z_max, x_min:x_max, y_min:y_max]
         return torch.FloatTensor(ct), torch.LongTensor(seg)
 
     def __len__(self):

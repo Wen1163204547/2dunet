@@ -5,6 +5,8 @@ from importlib import import_module
 from data import DataLoader2d as DatasetLoader 
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
+from models.sync_batchnorm import patch_replication_callback
+from hijack import hijack
 import SimpleITK as sitk
 import numpy as np
 import argparse
@@ -44,14 +46,16 @@ def main():
     loss = DiceLoss()
     #loss = torch.nn.CrossEntropyLoss()
     #loss = SoftmaxLoss()
+    hijack(net)
     net = net.cuda()
     loss = loss.cuda()
     net = torch.nn.DataParallel(net)
+    patch_replication_callback(net)
     if args.resume:
         checkpoint = torch.load(args.resume)
         net.module.load_state_dict(checkpoint['state_dict'])
     train_dataset = DatasetLoader('dataset/train', 
-                               'dataset/train', test=True) #, random=64)
+                               'dataset/train') #, random=64)
     val_dataset = DatasetLoader('dataset/val', 
                                'dataset/val', test=True)
     #val_dataset = DatasetLoader('/home/kxw/H-DenseUNet-master/data/myTestData', 
@@ -93,7 +97,7 @@ def main():
     for epoch in range(1, 1000+1):
         print ("epoch", epoch)
         lr = lr_restart(T0, Tcur, base_lr)
-        train(train_loader, net, loss, epoch, optimizer, lr, batch_size=24)
+        train(train_loader, net, loss, epoch, optimizer, lr, batch_size=12)
         #validate(val_loader, net, loss)
 
         Tcur = Tcur + 1
@@ -130,9 +134,9 @@ def train(train_loader, net, loss, epoch, optimizer, lr, batch_size):
             state_dict[key] = state_dict[key].cpu()
         torch.save({
             'epoch': epoch,
-            'save_dir': './ckpt',
+            'save_dir': args.save_dir,
             'state_dict': state_dict},
-            os.path.join('./ckpt', 'train_2d_%04d'%epoch+'.ckpt'))
+            os.path.join(args.save_dir, 'train_2d_%04d'%epoch+'.ckpt'))
 
     et = time.time()
     print('train loss %2.4f, time %2.4f' % (losses/101, et - st))
