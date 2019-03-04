@@ -71,8 +71,8 @@ def main():
         pin_memory=True)
     
     val_loader = DataLoader(
-        train_dataset,
-        #val_dataset,
+        #train_dataset,
+        val_dataset,
         batch_size = 1,
         shuffle = False,
         num_workers = 1,
@@ -168,6 +168,9 @@ def test(val_loader, net, loss=None):
     losses = np.zeros(1)
     softmax = nn.Softmax(dim=1)
     for i, (ct, seg, name) in enumerate(val_loader):
+        import matplotlib.pyplot as plt
+        import pdb
+        pdb.set_trace()
         out_results = []
         c1, c2 = 0, 0
         ct = Variable(ct).cuda().view(-1, 3, 512, 512)

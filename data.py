@@ -1,6 +1,6 @@
 import numpy as np
 import os
-# import SimpleITK as sitk  # too slow!
+import SimpleITK as sitk  # too slow!
 import nibabel as nib
 import torch
 from torch.utils.data import Dataset
@@ -26,10 +26,10 @@ class DataLoader2d(Dataset):
 
 
     def __getitem__(self, index):
-        ct = nib.load(self.ct_path[index]).get_data().transpose(2,1,0)
-        seg = nib.load(self.seg_path[index]).get_data().transpose(2,1,0)
-        #ct = sitk.GetArrayFromImage(sitk.ReadImage(self.ct_path[index]))
-        #seg = sitk.GetArrayFromImage(sitk.ReadImage(self.seg_path[index]))
+        #ct = nib.load(self.ct_path[index]).get_data().transpose(2,1,0)
+        #seg = nib.load(self.seg_path[index]).get_data().transpose(2,1,0)
+        ct = sitk.GetArrayFromImage(sitk.ReadImage(self.ct_path[index]))
+        seg = sitk.GetArrayFromImage(sitk.ReadImage(self.seg_path[index]))
         ct = np.array(ct, dtype=np.float32)
         seg = np.array(seg, dtype=np.uint8)
         ct = ct.clip(-200, 250)
